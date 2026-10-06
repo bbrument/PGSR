@@ -36,6 +36,10 @@ class CameraInfo(NamedTuple):
     height: int
     fx: float
     fy: float
+    # Calibrated principal point, in pixels from the top-left corner.
+    # Defaults to the image centre when the camera model does not provide one.
+    cx: float = -1.0
+    cy: float = -1.0
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -100,11 +104,14 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         if intr.model=="SIMPLE_PINHOLE":
             focal_length_x = intr.params[0]
+            focal_length_y = focal_length_x
+            cx, cy = intr.params[1], intr.params[2]
             FovY = focal2fov(focal_length_x, height)
             FovX = focal2fov(focal_length_x, width)
         elif intr.model=="PINHOLE":
             focal_length_x = intr.params[0]
             focal_length_y = intr.params[1]
+            cx, cy = intr.params[2], intr.params[3]
             FovY = focal2fov(focal_length_y, height)
             FovX = focal2fov(focal_length_x, width)
         else:
@@ -115,7 +122,8 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         cam_info = CameraInfo(uid=uid, global_id=idx, R=R, T=T, FovY=FovY, FovX=FovX,
                               image_path=image_path, image_name=image_name, 
-                              width=width, height=height, fx=focal_length_x, fy=focal_length_y)
+                              width=width, height=height, fx=focal_length_x, fy=focal_length_y,
+                              cx=cx, cy=cy)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos

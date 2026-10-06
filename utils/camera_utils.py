@@ -42,9 +42,22 @@ def loadCam(args, id, cam_info, resolution_scale):
     sys.stdout.write("load camera {}".format(id))
     sys.stdout.flush()
 
-    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
+    # Rescale the calibrated principal point along with the image. Pixel centres
+    # sit at integer+0.5, hence the (c + 0.5) * s - 0.5 mapping rather than c * s.
+    cx = getattr(cam_info, "cx", -1.0)
+    cy = getattr(cam_info, "cy", -1.0)
+    if cx is not None and cx >= 0.0:
+        sx = resolution[0] / orig_w
+        sy = resolution[1] / orig_h
+        cx = (cx + 0.5) * sx - 0.5
+        cy = (cy + 0.5) * sy - 0.5
+    else:
+        cx = cy = None
+
+    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T,
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY,
                   image_width=resolution[0], image_height=resolution[1],
+                  cx=cx, cy=cy,
                   image_path=cam_info.image_path,
                   image_name=cam_info.image_name, uid=cam_info.global_id, 
                   preload_img=args.preload_img, 
