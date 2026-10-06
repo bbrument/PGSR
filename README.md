@@ -1,3 +1,68 @@
+# PGSR fork: calibrated principal point (MARTINE benchmark)
+
+This is a fork of [zju3dv/PGSR](https://github.com/zju3dv/PGSR) (upstream commit `de24f1a`), made to evaluate PGSR on
+the MARTINE 3D reconstruction benchmark. It fixes how cameras are handled and leaves the method itself unchanged. The
+code stays under the [original license](LICENSE.md). The original README follows the horizontal rule below.
+
+## Why this fork
+
+Like 3D Gaussian Splatting, which it builds on, the official PGSR assumes that the principal point is at the image
+centre. It reads only the focal lengths of COLMAP `PINHOLE` / `SIMPLE_PINHOLE` cameras and silently discards `cx, cy`.
+Every viewing ray is then tilted by `offset / focal`, which shifts the reconstruction rigidly by about
+`offset / focal × depth`. On MARTINE (16 px decentring at 2392 × 1594, ~700 mm working distance) this is a **~4 mm
+bias**, larger than every F-score threshold of the benchmark.
+
+## What changed
+
+The changes are on branch `martine-principal-point`, which is this fork's default branch. `main` mirrors upstream.
+
+| Commit | Change |
+| :-- | :-- |
+| `fix(camera)` | `scene/dataset_readers.py` reads `cx, cy` from COLMAP cameras. `utils/camera_utils.py` rescales them with the image. `scene/cameras.py` uses them for `Cx, Cy` and builds the projection matrix with `getProjectionMatrixCenterShift`. `train.py` passes them on to the virtual cameras of the multi-view loss. |
+| `feat(rasterizer)` | `submodules/diff-plane-rasterization` takes `cx, cy` in `GaussianRasterizationSettings` and passes them through the Python wrapper, the torch bindings and `CudaRasterizer::forward/backward` to the forward and backward render kernels. Before, both kernels hard-coded `W/2, H/2` for the plane-depth rays. |
+| `fix(render)` | The TSDF fusion in `render.py` integrates float32 depth. Before, it stored depth in a uint16 image at 1/1000 scene unit, which overflows beyond 65.5 units (millimetre-scale scenes). |
+| `fix(simple-knn)` | Adds `#include <cfloat>` so that `simple-knn` compiles with recent CUDA toolkits. |
+
+**Backward compatible.** Datasets without a principal point (Blender / NeRF-synthetic) take the original code path.
+COLMAP cameras whose principal point is exactly the image centre give the same results as upstream (checked
+bit-identical). Results differ from upstream only where the calibrated principal point is off-centre, which is what
+the fix is for.
+
+## Build
+
+The build is the same as upstream (see *Installation* below), but clone this fork. **Rebuild the rasterizer.** Its
+Python and CUDA signatures changed, so a previously installed `diff_plane_rasterization` fails with
+`unexpected keyword argument 'cx'`.
+
+```shell
+git clone https://github.com/bbrument/PGSR.git
+cd PGSR
+# create the environment as in "Installation" below, then:
+pip install --force-reinstall --no-deps submodules/diff-plane-rasterization
+pip install submodules/simple-knn
+```
+
+## Use `-r 1` for images wider than 1600 px
+
+This behaviour comes from 3DGS. With the default `--resolution -1`, any image wider than 1600 px is downscaled to
+1600 px, and the only warning is an `[ INFO ]` console message. Pass `-r 1` to `train.py` to train at the input
+resolution. This fork does not change that default. `render.py` reads the setting back from the model's `cfg_args`.
+
+```shell
+python train.py -s <scene> -m <model> -r 1
+python render.py -m <model> --max_depth <d> --voxel_size <v>
+```
+
+Notes:
+
+- With `-r 2/4/8`, the principal point is rescaled as `(c + 0.5) · s − 0.5`, which assumes pixel centres on integer
+  coordinates. COLMAP's `cx` puts pixel centres at +0.5 (the centre of the image is `W/2`), and for that convention
+  `c · s` would be exact. The difference is `0.5 · (s − 1)`, i.e. −0.375 px at `s = 1/4`. With `-r 1` it is zero.
+- The `tan_fovx / tan_fovy` passed to the rasterizer stay symmetric. They only bound the 2D covariance computation
+  (the 1.3× frustum guard in `computeCov2D`), so the effect is negligible for small decentrings.
+
+---
+
 # PGSR: Planar-based Gaussian Splatting for Efficient and High-Fidelity Surface Reconstruction
 Danpeng Chen, Hai Li, [Weicai Ye](https://ywcmaike.github.io/), Yifan Wang, Weijian Xie, Shangjin Zhai, Nan Wang, Haomin Liu, Hujun Bao, [Guofeng Zhang](http://www.cad.zju.edu.cn/home/gfzhang/)
 ### [Project Page](https://zju3dv.github.io/pgsr/) | [arXiv](https://arxiv.org/abs/2406.06521)
