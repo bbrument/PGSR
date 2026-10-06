@@ -126,9 +126,9 @@ def render_set(model_path, name, iteration, views, scene, gaussians, pipeline, b
             pose[:3,:3] = view.R.transpose(-1,-2)
             pose[:3, 3] = view.T
             color = o3d.io.read_image(os.path.join(render_path, view.image_name + ".jpg"))
-            depth = o3d.geometry.Image((ref_depth*1000).astype(np.uint16))
+            depth = o3d.geometry.Image(ref_depth.astype(np.float32))
             rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
-                color, depth, depth_scale=1000.0, depth_trunc=max_depth, convert_rgb_to_intensity=False)
+                color, depth, depth_scale=1.0, depth_trunc=max_depth, convert_rgb_to_intensity=False)
             volume.integrate(
                 rgbd,
                 o3d.camera.PinholeCameraIntrinsic(W, H, view.Fx, view.Fy, view.Cx, view.Cy),
