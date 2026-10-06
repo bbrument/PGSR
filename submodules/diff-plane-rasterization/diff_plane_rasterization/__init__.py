@@ -77,6 +77,8 @@ class _RasterizeGaussians(torch.autograd.Function):
             raster_settings.projmatrix,
             raster_settings.tanfovx,
             raster_settings.tanfovy,
+            raster_settings.cx,
+            raster_settings.cy,
             raster_settings.image_height,
             raster_settings.image_width,
             sh,
@@ -126,9 +128,11 @@ class _RasterizeGaussians(torch.autograd.Function):
                 cov3Ds_precomp, 
                 raster_settings.viewmatrix, 
                 raster_settings.projmatrix, 
-                raster_settings.tanfovx, 
-                raster_settings.tanfovy, 
-                grad_out_color, 
+                raster_settings.tanfovx,
+                raster_settings.tanfovy,
+                raster_settings.cx,
+                raster_settings.cy,
+                grad_out_color,
                 grad_out_all_map,
                 grad_out_plane_depth,
                 sh, 
@@ -172,9 +176,13 @@ class _RasterizeGaussians(torch.autograd.Function):
 
 class GaussianRasterizationSettings(NamedTuple):
     image_height: int
-    image_width: int 
+    image_width: int
     tanfovx : float
     tanfovy : float
+    # Principal point in pixels. The plane-depth unprojection needs it; passing
+    # (width/2, height/2) reproduces the original centred behaviour exactly.
+    cx : float
+    cy : float
     bg : torch.Tensor
     scale_modifier : float
     viewmatrix : torch.Tensor
